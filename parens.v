@@ -1,4 +1,4 @@
-Require Import List.
+Require Import List PeanoNat ZArith.
 
 Inductive parens := Parens : list parens -> parens.
 
@@ -26,8 +26,6 @@ Inductive all {A} (P : A -> Prop) : list A -> Prop :=
   | all_nil : all P nil
   | all_cons : forall (x : A) (xs : list A), P x -> all P xs -> all P (x :: xs).
 
-Parameter Hole : Type. Parameter hole : Hole.
-
 Fixpoint parens_ind_2 (P : parens -> Prop)
   (Hparens : forall l, all P l -> P (Parens l))
   p : P p :=
@@ -46,29 +44,68 @@ Fixpoint parens_ind_2 (P : parens -> Prop)
 
 (*******************************************************)
 
+Scheme Equality for char.
 
-Fixpoint count_open (l : list char) : nat :=
+Definition eq_char := char_eq_dec.
+
+Definition count_char_1 c x := if eq_char x c then 1 else 0.
+
+Fixpoint count_char (c : char) (l : list char) : nat :=
   match l with
   | nil => 0
-  | Open :: xs => S (count_open xs)
-  | Close :: xs => count_open xs
+  | x :: xs => count_char_1 c x + count_char c xs
   end%list.
 
+Definition count_close := count_char Close.
+Definition count_open := count_char Open.
 
-Fixpoint count_close (l : list char) : nat :=
-  match l with
-  | nil => 0
-  | Open :: xs => count_close xs
-  | Close :: xs => S (count_close xs)
-  end%list.
-
-Lemma count_open_append
-
-Theorem encode_count_eq : forall p, count_open (encode p) = count_close (encode p).
+Lemma count_char_append : forall c xs ys, count_char c (xs ++ ys) = count_char c xs + count_char c ys.
 Proof.
+  intros c xs ys.
+  induction xs.
+  - auto.
+  - simpl. rewrite IHxs. omega.
+Qed.
+
+Lemma encode_count_all : forall P xs,
+  all (fun p : parens => P (encode p)) xs ->
+  P nil ->
+  (forall xs ys, P xs -> P ys -> P (xs ++ ys)) ->
+  P (concat (map encode xs)).
+Proof.
+  intros P xs Hall Hnil Happend.
+  induction Hall.
+  - auto.
+  - apply Happend; auto.
+Qed.
+
+Definition Balanced xs := count_char Open xs = count_char Close xs.
+
+Lemma balanced_append : forall xs ys, Balanced xs -> Balanced ys -> Balanced (xs ++ ys).
+Proof.
+  unfold Balanced.
+  intros.
+  repeat rewrite count_char_append.
+  auto.
+Qed.
+
+Theorem encode_count_eq : forall p, Balanced (encode p).
+Proof.
+  unfold Balanced.
   intros.
   apply parens_ind_2 with (p:=p).
   intros.
-  induction H.
-  - reflexivity.
+  destruct H.
+  - auto.
   - simpl.
+    repeat rewrite count_char_append.
+    rewrite H. simpl.
+    rewrite Nat.add_0_r.
+    rewrite Nat.add_1_r.
+    f_equal.
+    f_equal.
+    apply encode_count_all. apply H0. reflexivity. apply balanced_append.
+Qed.
+
+Require Extraction.
+Recursive Extraction encode.
