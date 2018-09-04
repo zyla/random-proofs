@@ -107,5 +107,4 @@ Proof.
     apply encode_count_all. apply H0. reflexivity. apply balanced_append.
 Qed.
 
-Require Extraction.
 Recursive Extraction encode.
