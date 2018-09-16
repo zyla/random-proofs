@@ -1,5 +1,6 @@
 Require Import List String.
 Import ListNotations.
+Require Import Coq.Numbers.DecimalString.
 Local Open Scope string_scope.
 
 
@@ -39,7 +40,7 @@ Definition Rep_F xs := Product (map field_type xs).
 Definition Rep_C xs := Sum (map (fun x => Rep_F (fields x)) xs).
 Definition Rep (s : Shape) : Set := Rep_C s.(constructors).
 
-Fact rep_test1 :
+Example rep_test1 :
   Rep (Build_Shape "test"
     [ Build_Constructor "C1" []
     ; Build_Constructor "C2" [Build_Field (Some "F1") nat]
@@ -47,8 +48,8 @@ Fact rep_test1 :
   (unit +
    (nat * unit +
     (nat * (bool * unit) +
-     empty)))%type.
-auto. Qed.
+     empty)))%type
+  := eq_refl.
 
 Class Show (A : Set) := {
   show : A -> string
@@ -148,21 +149,44 @@ Fixpoint intercalate (sep : string) (l : list string) : string :=
   | x :: xs => x ++ sep ++ intercalate sep xs
   end.
 
+Definition All_C P := All (fun c => All (fun x => P (field_type x)) c.(fields)).
+
 Fixpoint genericShow (cs : list Constructor)
-  {allShow : All (fun c => All (fun x => Show (field_type x)) c.(fields)) cs}
+  {allShow : All_C Show cs}
   (x : Rep_C cs) : string :=
   elim_sum _ _
     (fun c Pc flds =>
+      c.(con_name) ++ " (" ++
       intercalate ", "
        (map (@snd (option string) string)
-         (elim_fields _ _ 
-            (fun x => _)
-          c.(fields) Pc flds)))
+         (shows_fields2
+          c.(fields) Pc flds)) ++ ")")
     cs allShow x.
 
-Notation "!" := (ltac:(simpl; typeclasses eauto)).
+Notation solve_constraint := (ltac:(compute; typeclasses eauto)) (only parsing).
 
-Eval compute in
-  (intercalate ", "
-    (@shows_product [unit; unit] ! (tt, (tt, tt)))).
+Definition test_shape :=
+  Build_Shape "test"
+    [ Build_Constructor "C1" []
+    ; Build_Constructor "C2" [Build_Field (Some "F1") nat]
+    ; Build_Constructor "C3" [Build_Field None nat; Build_Field None bool]].
 
+Instance Show_bool : Show bool := {
+  show x :=
+    match x with
+    | true => "true"
+    | false => "false"
+    end
+}.
+
+Definition string_of_nat x := NilZero.string_of_int (Nat.to_int x).
+
+Instance Show_nat : Show nat := {
+  show := string_of_nat
+}.
+
+Example test_genericShow :
+  @genericShow test_shape.(constructors) solve_constraint
+    (inr (inr (inl (179, (true, tt)))))
+    = "C3 (179, true)"
+    := eq_refl.
